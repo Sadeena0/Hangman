@@ -1,43 +1,52 @@
 package Client;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Main{
     public static void main(String[] args) throws IOException{
         int port = 8000;
         String host = "localhost";
         Socket socket;
-        Scanner reader = new Scanner(System.in);
 
         socket = new Socket(host, port);
         DataInputStream in = new DataInputStream(socket.getInputStream());
         DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 
-        while(true){
-            //TODO: make Thread to constantly listen, writing anything Client receives
-            new Thread(() -> { //Listener thread
-                try {
-                    while(true){
-                        System.out.println(in.readUTF());
-                    }
-                } catch(IOException e) {
-                    e.printStackTrace();
-                }
-            }).start();
+        BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
 
-            //TODO: make Thread to constantly write, sending anything after user presses enter
-            new Thread(() -> { //Writer thread
-                try {
-                    while(true){
-                        out.writeUTF(reader.nextLine());
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
+        //Create a thread for reading
+        new Thread(() -> {
+            try {
+                while(true){
+                    String receivedMessage = in.readUTF(); //Read the message from the input stream
+                    System.out.println(receivedMessage);
                 }
-            }).start();
+            } catch(IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
+
+        //Create a thread for writing
+        new Thread(() -> {
+            try {
+                while(true){
+                    String message = messageQueue.take(); //Blocking call to wait for a message
+                    out.writeUTF(message); //Write the message to the output stream
+                    out.flush();
+                }
+            } catch(InterruptedException | IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
+
+        //Continue reading input and enqueue messages for writing
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        String input;
+        while((input = reader.readLine()) != null){
+            messageQueue.offer(input); //Enqueue the input message for writing
         }
     }
 }

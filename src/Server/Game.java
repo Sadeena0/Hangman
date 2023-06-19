@@ -13,6 +13,8 @@ public class Game implements Runnable{
     private DataInputStream in;
     private DataOutputStream out;
 
+    private String receivedMessage = "";
+
     private boolean gameIsRunning;
 
     private String word;
@@ -26,29 +28,44 @@ public class Game implements Runnable{
     @Override
     public void run(){
         try {
-            //Init in/out streams
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
 
-            out.writeUTF("Please type back 'confirm' to check communication");
-            while(in.readUTF().isEmpty()){ //Wait for confirmation
-            }
+            //Create a thread for reading
+            new Thread(() -> {
+                try {
+                    while(true){
+                        receivedMessage = in.readUTF(); //Read the message from the input stream
+                        System.out.println(receivedMessage);
+                    }
+                } catch(IOException e) {
+                    e.printStackTrace();
+                }
+            }).start();
 
+            out.writeUTF("Please type 'start' to start playing!");
+            while(!receivedMessage.equals("start")){ //Wait for confirmation
+                Thread.sleep(100); //Sleep to avoid excessive CPU usage
+            }
+            out.writeUTF("Game started!");
+
+            //TODO: game logic
             while(true){ //Loop for each new game (until user closes connection)
+                System.out.println(in.readUTF());
                 out.writeUTF("Initializing game..."); //Init game and variables
                 gameIsRunning = true;
                 selectWord();
 
-                while(gameIsRunning){ //Loop for each turn (as long as game is running)
-                    printInterface();
-                    out.writeUTF("Guess next letter:");
-                    while(in.readUTF().isEmpty()){
-                        guessedLetter = in.readChar();
-                    } //Wait for letter
-
-
-
-                }
+//                while(gameIsRunning){ //Loop for each turn (as long as game is running)
+//                    printInterface();
+//                    out.writeUTF("Guess next letter:");
+//                    while(in.readUTF().isEmpty()){
+//                        guessedLetter = in.readChar();
+//                    } //Wait for letter
+//
+//
+//
+//                }
 
             }
         } catch(Exception e) {
@@ -76,15 +93,16 @@ public class Game implements Runnable{
     }
 
 
+    //TODO: fix this mess lol
     private void printInterface() throws IOException{
-        out.writeUTF(   "██╗░░██╗░█████╗░███╗░░██╗░██████╗░███╗░░░███╗░█████╗░███╗░░██╗\n" +
-                            "██║░░██║██╔══██╗████╗░██║██╔════╝░████╗░████║██╔══██╗████╗░██║\n" +
-                            "███████║███████║██╔██╗██║██║░░██╗░██╔████╔██║███████║██╔██╗██║\n" +
-                            "██╔══██║██╔══██║██║╚████║██║░░╚██╗██║╚██╔╝██║██╔══██║██║╚████║\n" +
-                            "██║░░██║██║░░██║██║░╚███║╚██████╔╝██║░╚═╝░██║██║░░██║██║░╚███║\n" +
-                            "╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝░╚═════╝░╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝");
-        out.writeUTF(   "                                                              \n" +
-                            "                                                              ");
+        out.writeUTF("██╗░░██╗░█████╗░███╗░░██╗░██████╗░███╗░░░███╗░█████╗░███╗░░██╗\n" +
+                "██║░░██║██╔══██╗████╗░██║██╔════╝░████╗░████║██╔══██╗████╗░██║\n" +
+                "███████║███████║██╔██╗██║██║░░██╗░██╔████╔██║███████║██╔██╗██║\n" +
+                "██╔══██║██╔══██║██║╚████║██║░░╚██╗██║╚██╔╝██║██╔══██║██║╚████║\n" +
+                "██║░░██║██║░░██║██║░╚███║╚██████╔╝██║░╚═╝░██║██║░░██║██║░╚███║\n" +
+                "╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝░╚═════╝░╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝");
+        out.writeUTF("                                                              \n" +
+                "                                                              ");
 
         //TODO: write hangman, based on how many mistakes made
         //...

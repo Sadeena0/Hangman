@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Scanner;
+import java.util.regex.*;
 
 public class Game implements Runnable{
     private Socket socket;
@@ -109,12 +110,14 @@ public class Game implements Runnable{
 
                         //TODO: regex here?
                         //Check if received message is a singular character and valid letter input
-                        if(receivedMessage.length() != 1){
+                        if (receivedMessage.length() != 1) {
                             out.writeUTF("Please enter just a singular letter.");
-                        }else{
-                            if(!Arrays.toString(validCharacters).contains(receivedMessage)){
+                        } else {
+                            Pattern pattern = Pattern.compile("[a-z]");
+                            Matcher matcher = pattern.matcher(receivedMessage);
+                            if (!matcher.matches()) {
                                 out.writeUTF("Please enter a valid letter.");
-                            }else{
+                            } else {
                                 break;
                             }
                         }

@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Scanner;
 
@@ -15,10 +16,11 @@ public class Game implements Runnable{
 
     private String receivedMessage = "";
 
-    private boolean gameIsRunning;
+//    private Lock lock = new ReentrantLock();
 
-    private String word;
-    private Character guessedLetter;
+    private Character[] validCharacters = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
+    private volatile String word;
+    private String guessedLetters;
     private int mistakes;
 
     Game(Socket clientSocket){
@@ -36,38 +38,120 @@ public class Game implements Runnable{
                 try {
                     while(true){
                         receivedMessage = in.readUTF(); //Read the message from the input stream
-                        System.out.println(receivedMessage);
+                        receivedMessage = receivedMessage.toLowerCase();
+                        System.out.println(socket.getInetAddress().getHostAddress() + "\tReceived: " + receivedMessage);
                     }
                 } catch(IOException e) {
                     e.printStackTrace();
                 }
             }).start();
 
+            //Ask to start playing
+            receivedMessage = "";
             out.writeUTF("Please type 'start' to start playing!");
-            while(!receivedMessage.equals("start")){ //Wait for confirmation
+            while(!receivedMessage.equals("start")){ //Wait for response
                 Thread.sleep(100); //Sleep to avoid excessive CPU usage
             }
-            out.writeUTF("Game started!");
 
-            //TODO: game logic
-            while(true){ //Loop for each new game (until user closes connection)
-                System.out.println(in.readUTF());
-                out.writeUTF("Initializing game..."); //Init game and variables
-                gameIsRunning = true;
+            //Loop for each new game
+            while(true){
+                //Init game and variables
+                out.writeUTF("Initializing game...");
+                word = "";
+                guessedLetters = "";
+                mistakes = 0;
+
+                //Select word and print initial interface
                 selectWord();
+                Thread.sleep(100); //TODO ugly thread.sleep(), see bottom todo comment
+                printInterface();
 
-//                while(gameIsRunning){ //Loop for each turn (as long as game is running)
-//                    printInterface();
-//                    out.writeUTF("Guess next letter:");
-//                    while(in.readUTF().isEmpty()){
-//                        guessedLetter = in.readChar();
-//                    } //Wait for letter
-//
-//
-//
-//                }
+                //Loop for each letter
+                letter:
+                while(true){
+                    //Check for wincondition
+                    boolean winCondition = true;
+                    for(int i = 0; i < word.length(); i++){
+                        if(!guessedLetters.contains(String.valueOf(word.charAt(i)))){
+                            winCondition = false;
+                        }
+                    }
 
+                    if(winCondition){
+                        out.writeUTF("You won! Congratulations!");
+                        System.out.println(socket.getInetAddress().getHostAddress() + "\t<-- won");
+                        break;
+                    }else if(mistakes > 5){
+                        out.writeUTF("You lost. The word was " + word);
+                        System.out.println(socket.getInetAddress().getHostAddress() + "\t<-- lost");
+                        break;
+                    }
+
+                    //Getting letter
+                    while(true){
+                        receivedMessage = "";
+                        out.writeUTF("Guess a letter:");
+                        while(receivedMessage.equals("")){ //Wait for response
+                            Thread.sleep(100); //Sleep to avoid excessive CPU usage
+                        }
+
+                        //Stop if message is stop
+                        if(receivedMessage.equals("stop")){
+                            closeConnection();
+                        }
+
+                        //Win instantly if entire correct word is inputted
+                        if(receivedMessage.equals(word)){
+                            out.writeUTF("You won! Congratulations!");
+                            System.out.println(socket.getInetAddress().getHostAddress() + "\t<-- won");
+                            break letter;
+                        }
+
+                        //TODO: regex here?
+                        //Check if received message is a singular character and valid letter input
+                        if(receivedMessage.length() != 1){
+                            out.writeUTF("Please enter just a singular letter.");
+                        }else{
+                            if(!Arrays.toString(validCharacters).contains(receivedMessage)){
+                                out.writeUTF("Please enter a valid letter.");
+                            }else{
+                                break;
+                            }
+                        }
+                    }
+
+                    //If letter isn't already in list of guessed letters, add it
+                    if(!guessedLetters.contains(receivedMessage)){
+                        guessedLetters += receivedMessage;
+                    }
+
+                    //Checking if word contains letter. If it doesn't, add mistake
+                    if(!word.contains(receivedMessage)){
+                        mistakes++;
+                    }
+
+                    //Update interface
+                    printInterface();
+                }
+
+                //Ask to replay
+                receivedMessage = "";
+                out.writeUTF("Do you want to play again? Y/N");
+                while(!receivedMessage.equals("y") && !receivedMessage.equals("n")){ //Wait for response
+                    Thread.sleep(100); //Sleep to avoid excessive CPU usage
+                }
+
+                if(receivedMessage.equals("y")){
+                    out.writeUTF("Excellent!");
+                    System.out.println(socket.getInetAddress().getHostAddress() + "\tRestarting...");
+                }else{
+                    out.writeUTF("Bye bye!");
+                    break;
+                }
             }
+
+            System.out.println(socket.getInetAddress().getHostAddress() + "\tclosing connection");
+            closeConnection();
         } catch(Exception e) {
             e.printStackTrace();
         }
@@ -75,82 +159,130 @@ public class Game implements Runnable{
 
     private void selectWord(){
         new Thread(() -> {
+//            lock.lock();
             try {
                 ArrayList<String> list = new ArrayList<>();
                 File words = new File("words.txt");
                 Scanner reader = new Scanner(words);
 
+                //Add all words from words.txt to ArrayList
                 while(reader.hasNextLine()){
                     list.add(reader.nextLine());
                 }
 
+                //Shuffle ArrayList and pick first word
                 Collections.shuffle(list);
                 word = list.get(0);
+                System.out.println(socket.getInetAddress().getHostAddress() + "\tSelected word: " + word);
             } catch(Exception e) {
                 e.printStackTrace();
             }
+//            finally {
+//                lock.unlock();
+//            }
         }).start();
     }
 
+    private void closeConnection() throws IOException{
+        //TODO: safely shut down reading thread and close connection (both server and socket side)
+        // Should it close from server side or from client side? who knows, not me ¯\_(ツ)_/¯
+        socket.shutdownInput();
+        socket.shutdownOutput();
+        socket.close();
+    }
 
-    //TODO: fix this mess lol
     private void printInterface() throws IOException{
-        out.writeUTF("██╗░░██╗░█████╗░███╗░░██╗░██████╗░███╗░░░███╗░█████╗░███╗░░██╗\n" +
-                "██║░░██║██╔══██╗████╗░██║██╔════╝░████╗░████║██╔══██╗████╗░██║\n" +
-                "███████║███████║██╔██╗██║██║░░██╗░██╔████╔██║███████║██╔██╗██║\n" +
-                "██╔══██║██╔══██║██║╚████║██║░░╚██╗██║╚██╔╝██║██╔══██║██║╚████║\n" +
-                "██║░░██║██║░░██║██║░╚███║╚██████╔╝██║░╚═╝░██║██║░░██║██║░╚███║\n" +
-                "╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝░╚═════╝░╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝");
-        out.writeUTF("                                                              \n" +
-                "                                                              ");
+//        lock.lock();
+//        try {
+            //Spacer
+            out.writeUTF("\n\n");
 
-        //TODO: write hangman, based on how many mistakes made
-        //...
+            //Header
+            out.writeUTF("██╗░░██╗░█████╗░███╗░░██╗░██████╗░███╗░░░███╗░█████╗░███╗░░██╗\n" +
+                    "██║░░██║██╔══██╗████╗░██║██╔════╝░████╗░████║██╔══██╗████╗░██║\n" +
+                    "███████║███████║██╔██╗██║██║░░██╗░██╔████╔██║███████║██╔██╗██║\n" +
+                    "██╔══██║██╔══██║██║╚████║██║░░╚██╗██║╚██╔╝██║██╔══██║██║╚████║\n" +
+                    "██║░░██║██║░░██║██║░╚███║╚██████╔╝██║░╚═╝░██║██║░░██║██║░╚███║\n" +
+                    "╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝░╚═════╝░╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝");
 
-        //TODO: write right amount of _'s by using foreach loop based on wordlength
-        switch(word.length()){
-            case 1:
-                out.writeUTF("_");
-                break;
-            case 2:
-                out.writeUTF("__");
-                break;
-            case 3:
-                out.writeUTF("___");
-                break;
-            case 4:
-                out.writeUTF("____");
-                break;
-            case 5:
-                out.writeUTF("_____");
-                break;
-            case 6:
-                out.writeUTF("______");
-                break;
-            case 7:
-                out.writeUTF("_______");
-                break;
-            case 8:
-                out.writeUTF("________");
-                break;
-            case 9:
-                out.writeUTF("__________");
-                break;
-            case 10:
-                out.writeUTF("___________");
-                break;
-            case 11:
-                out.writeUTF("____________");
-                break;
-            case 12:
-                out.writeUTF("_____________");
-                break;
-            case 13:
-                out.writeUTF("______________");
-                break;
-            case 14:
-                out.writeUTF("_______________");
-                break;
-        }
+            //Spacer
+            out.writeUTF("\n");
+
+            //Hangman graphic
+            String[] hangman = {" +----+\n" +
+                    " |    |\n" +
+                    " |     \n" +
+                    " |     \n" +
+                    " |     \n" +
+                    " |     \n" +
+                    "=========\t\t" + guessedLetters,
+                    " +----+\n" +
+                            " |    |\n" +
+                            " |    O\n" +
+                            " |     \n" +
+                            " |     \n" +
+                            " |     \n" +
+                            "=========\t\t" + guessedLetters,
+                    " +----+\n" +
+                            " |    |\n" +
+                            " |    O\n" +
+                            " |    |\n" +
+                            " |     \n" +
+                            " |     \n" +
+                            "=========\t\t" + guessedLetters,
+                    " +----+\n" +
+                            " |    |\n" +
+                            " |    O\n" +
+                            " |   /|\n" +
+                            " |     \n" +
+                            " |     \n" +
+                            "=========\t\t" + guessedLetters,
+                    " +----+\n" +
+                            " |    |\n" +
+                            " |    O\n" +
+                            " |   /|\\ \n" +
+                            " |     \n" +
+                            " |     \n" +
+                            "=========\t\t" + guessedLetters,
+                    " +----+\n" +
+                            " |    |\n" +
+                            " |    O\n" +
+                            " |   /|\\ \n" +
+                            " |   / \n" +
+                            " |     \n" +
+                            "=========\t\t" + guessedLetters,
+                    " +----+\n" +
+                            " |    |\n" +
+                            " |    O\n" +
+                            " |   /|\\ \n" +
+                            " |   / \\ \n" +
+                            " |     \n" +
+                            "=========\t\t" + guessedLetters,};
+
+            out.writeUTF(hangman[mistakes]);
+
+            //Spacer
+            out.writeUTF("");
+
+            //Hidden word
+            StringBuilder hiddenWordString = new StringBuilder();
+            //TODO: NullPointerException because word gets called before it's initialized in selectWord() thread
+            // Now fixed by using thread.sleep() after calling selectWord().
+            // Try to fix using synchronized locks?
+            for(int i = 0; i < word.length(); i++){
+                if(guessedLetters.contains(String.valueOf(word.charAt(i)))){
+                    hiddenWordString.append(word.charAt(i));
+                }else{
+                    hiddenWordString.append("_");
+                }
+            }
+            out.writeUTF(hiddenWordString.toString());
+
+            //Spacer
+            out.writeUTF("");
+//        }
+//        finally {
+//            lock.unlock();
+//        }
     }
 }

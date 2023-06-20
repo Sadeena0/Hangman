@@ -146,10 +146,8 @@ public class Game implements Runnable{
                 }
 
                 if(receivedMessage.equals("y")){
-                    out.writeUTF("Excellent!");
                     System.out.println(adress + "\tRestarting...");
                 }else{
-                    out.writeUTF("Bye bye!");
                     break;
                 }
             }
@@ -166,8 +164,35 @@ public class Game implements Runnable{
     private void selectWord(){
         new Thread(() -> {
             try {
+                File words;
+
+                out.writeUTF("Please choose one of the following categories:\n- General words\n- Countries\n- Food\n- Sports\n- Dogs");
+                while(!receivedMessage.equals("general words") && !receivedMessage.equals("countries") && !receivedMessage.equals("food") && !receivedMessage.equals("sports") && !receivedMessage.equals("dogs")){ //Wait for response
+                    Thread.sleep(100); //Sleep to avoid excessive CPU usage
+                }
+
+                switch(receivedMessage){
+                    case "general words":
+                        words = new File("words.txt");
+                        break;
+                    case "countries":
+                        words = new File("countries.txt");
+                        break;
+                    case "food":
+                        words = new File("food.txt");
+                        break;
+                    case "sports":
+                        words = new File("sports.txt");
+                        break;
+                    case "dogs":
+                        words = new File("dogs.txt");
+                        break;
+                    default:
+                        words = new File("words.txt");
+                        break;
+                }
+
                 ArrayList<String> list = new ArrayList<>();
-                File words = new File("words.txt");
                 Scanner reader = new Scanner(words);
 
                 // Add all words from words.txt to ArrayList

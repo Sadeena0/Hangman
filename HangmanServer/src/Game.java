@@ -21,7 +21,7 @@ public class Game implements Runnable{
     private String guessedLetters;
     private int mistakes;
 
-    private volatile boolean running = true;
+    private volatile boolean readingThreadFinished = false;
     private Thread readingThread;
 
     Game(Socket clientSocket){
@@ -31,6 +31,8 @@ public class Game implements Runnable{
 
     @Override
     public void run(){
+        System.out.println(adress + "\tCreated thread");
+
         try {
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
@@ -38,13 +40,17 @@ public class Game implements Runnable{
             //Create a thread for reading
             readingThread = new Thread(() -> {
                 try {
-                    while(running){
+                    while(true){
                         receivedMessage = in.readUTF();
                         receivedMessage = receivedMessage.toLowerCase();
                         System.out.println(adress + "\tReceived: " + receivedMessage);
                     }
                 } catch(IOException e) {
-                    e.printStackTrace();
+                    if(!socket.isClosed()){
+                        e.printStackTrace();
+                    }
+                } finally {
+                    readingThreadFinished = true;
                 }
             });
             readingThread.start();
@@ -56,7 +62,7 @@ public class Game implements Runnable{
                 Thread.sleep(100); //Sleep to avoid excessive CPU usage
             }
 
-            //Loop for each new game
+            game:
             while(true){
                 //Init game and variables
                 out.writeUTF("Initializing game...");
@@ -101,7 +107,7 @@ public class Game implements Runnable{
 
                         //Stop if message is stop
                         if(receivedMessage.equals("stop")){
-                            closeConnection();
+                            break game;
                         }
 
                         //Win instantly if entire correct word is inputted
@@ -152,6 +158,8 @@ public class Game implements Runnable{
         } catch(Exception e) {
             e.printStackTrace();
         }
+
+        System.out.println(adress + "\tKilled thread");
     }
 
 
@@ -179,20 +187,21 @@ public class Game implements Runnable{
     }
 
     private void closeConnection() throws IOException{
-        out.writeUTF("Connection closed");
-        System.out.println(adress + "\tClosed connection");
+        out.writeUTF("Server connection closing");
+        System.out.println(adress + "\tServer closed connection");
 
-        running = false; // Stop the reading thread
+        in.close();
+        out.close();
 
         try {
-            readingThread.join(); // Wait for the reading thread to finish
+            while(!readingThreadFinished){
+                Thread.sleep(100);
+            }
+            readingThread.join();
         } catch(InterruptedException e) {
             e.printStackTrace();
         }
 
-        // Close the connection
-        in.close();
-        out.close();
         socket.close();
     }
 

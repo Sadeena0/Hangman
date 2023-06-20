@@ -4,7 +4,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Main{
-    public static void main(String[] args) throws IOException{
+    public static void main(String[] args) throws IOException, InterruptedException{
         int port = 8000;
         String host = "localhost";
         Socket socket;
@@ -15,22 +15,15 @@ public class Main{
 
         BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
 
-        //Create a thread for reading
-        new Thread(() -> {
-            try {
-                while(true){
-                    String receivedMessage = in.readUTF(); //Read the message from the input stream
-                    System.out.println(receivedMessage);
-                }
-            } catch(IOException e) {
-                e.printStackTrace();
-            }
-        }).start();
+        Thread writingThread;
+        Thread readingThread;
+
+        final boolean[] running = {true};
 
         //Create a thread for writing
-        new Thread(() -> {
+        writingThread = new Thread(() -> {
             try {
-                while(true){
+                while(running[0]){
                     String message = messageQueue.take(); //Blocking call to wait for a message
                     out.writeUTF(message); //Write the message to the output stream
                     out.flush();
@@ -38,7 +31,32 @@ public class Main{
             } catch(InterruptedException | IOException e) {
                 e.printStackTrace();
             }
-        }).start();
+        });
+        writingThread.start();
+
+        //Create a thread for reading
+        readingThread = new Thread(() -> {
+            try {
+                while(true){
+                    String receivedMessage = in.readUTF(); //Read the message from the input stream
+                    System.out.println(receivedMessage);
+
+                    if(receivedMessage.equals("Server connection closing")){
+                        System.out.println("Stopping threads, in/out streams and closing socket...");
+                        running[0] = false; //Stop writing thread
+                        in.close();
+                        out.close();
+                        socket.close();
+
+                        //Exit program
+                        System.exit(0);
+                    }
+                }
+            } catch(IOException e) {
+                e.printStackTrace();
+            }
+        });
+        readingThread.start();
 
         //Continue reading input and enqueue messages for writing
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));

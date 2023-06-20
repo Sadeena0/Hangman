@@ -21,6 +21,7 @@ public class Game implements Runnable{
 
     private Character[] validCharacters = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
     private volatile String word;
+    private final Object wordLock = new Object(); // Lock object for synchronization
     private String guessedLetters;
     private int mistakes;
 
@@ -178,29 +179,54 @@ public class Game implements Runnable{
         }
     }
 
-    private void selectWord(){
-        new Thread(() -> {
-//            lock.lock();
-            try {
-                ArrayList<String> list = new ArrayList<>();
-                File words = new File("words.txt");
-                Scanner reader = new Scanner(words);
-
-                //Add all words from words.txt to ArrayList
-                while(reader.hasNextLine()){
-                    list.add(reader.nextLine());
-                }
-
-                //Shuffle ArrayList and pick first word
-                Collections.shuffle(list);
-                word = list.get(0);
-                System.out.println(socket.getInetAddress().getHostAddress() + "\tSelected word: " + word);
-            } catch(Exception e) {
-                e.printStackTrace();
-            }
-//            finally {
-//                lock.unlock();
+//    private void selectWord(){
+//        new Thread(() -> {
+////            lock.lock();
+//            try {
+//                ArrayList<String> list = new ArrayList<>();
+//                File words = new File("words.txt");
+//                Scanner reader = new Scanner(words);
+//
+//                //Add all words from words.txt to ArrayList
+//                while(reader.hasNextLine()){
+//                    list.add(reader.nextLine());
+//                }
+//
+//                //Shuffle ArrayList and pick first word
+//                Collections.shuffle(list);
+//                word = list.get(0);
+//                System.out.println(socket.getInetAddress().getHostAddress() + "\tSelected word: " + word);
+//            } catch(Exception e) {
+//                e.printStackTrace();
 //            }
+////            finally {
+////                lock.unlock();
+////            }
+//        }).start();
+//    }
+
+
+    private void selectWord() {
+        new Thread(() -> {
+            synchronized (wordLock) { // Acquire the lock
+                try {
+                    ArrayList<String> list = new ArrayList<>();
+                    File words = new File("words.txt");
+                    Scanner reader = new Scanner(words);
+
+                    // Add all words from words.txt to ArrayList
+                    while (reader.hasNextLine()) {
+                        list.add(reader.nextLine());
+                    }
+
+                    // Shuffle ArrayList and pick first word
+                    Collections.shuffle(list);
+                    word = list.get(0);
+                    System.out.println(socket.getInetAddress().getHostAddress() + "\tSelected word: " + word);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } // Release the lock
         }).start();
     }
 
@@ -231,6 +257,7 @@ public class Game implements Runnable{
     private void printInterface() throws IOException{
 //        lock.lock();
 //        try {
+        synchronized (wordLock) { // Acquire the lock
             //Spacer
             out.writeUTF("\n\n");
 
@@ -302,18 +329,19 @@ public class Game implements Runnable{
             out.writeUTF("");
 
             //Hidden word
-            StringBuilder hiddenWordString = new StringBuilder();
+            StringBuilder hiddenWordString = new StringBuilder( );
             //TODO: NullPointerException because word gets called before it's initialized in selectWord() thread
             // Now fixed by using thread.sleep() after calling selectWord().
             // Try to fix using synchronized locks?
-            for(int i = 0; i < word.length(); i++){
-                if(guessedLetters.contains(String.valueOf(word.charAt(i)))){
+            // Fixed with synchronized locks (not sure what you want to do with thread.sleep though)
+            for (int i = 0; i < word.length( ); i++) {
+                if (guessedLetters.contains(String.valueOf(word.charAt(i)))) {
                     hiddenWordString.append(word.charAt(i));
-                }else{
+                } else {
                     hiddenWordString.append("_");
                 }
             }
-            out.writeUTF(hiddenWordString.toString());
+            out.writeUTF(hiddenWordString.toString( ));
 
             //Spacer
             out.writeUTF("");
@@ -321,5 +349,6 @@ public class Game implements Runnable{
 //        finally {
 //            lock.unlock();
 //        }
+        }
     }
 }

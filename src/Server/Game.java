@@ -24,6 +24,10 @@ public class Game implements Runnable{
     private String guessedLetters;
     private int mistakes;
 
+    private volatile boolean running = true;
+    private Thread readingThread; // Declare readingThread as a class member
+
+
     Game(Socket clientSocket){
         this.socket = clientSocket;
     }
@@ -35,17 +39,30 @@ public class Game implements Runnable{
             out = new DataOutputStream(socket.getOutputStream());
 
             //Create a thread for reading
-            new Thread(() -> {
+//            new Thread(() -> {
+//                try {
+//                    while(true){
+//                        receivedMessage = in.readUTF(); //Read the message from the input stream
+//                        receivedMessage = receivedMessage.toLowerCase();
+//                        System.out.println(socket.getInetAddress().getHostAddress() + "\tReceived: " + receivedMessage);
+//                    }
+//                } catch(IOException e) {
+//                    e.printStackTrace();
+//                }
+//            }).start();
+
+            readingThread = new Thread(() -> {
                 try {
-                    while(true){
-                        receivedMessage = in.readUTF(); //Read the message from the input stream
+                    while (running) {
+                        receivedMessage = in.readUTF();
                         receivedMessage = receivedMessage.toLowerCase();
                         System.out.println(socket.getInetAddress().getHostAddress() + "\tReceived: " + receivedMessage);
                     }
-                } catch(IOException e) {
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
-            }).start();
+            });
+            readingThread.start();
 
             //Ask to start playing
             receivedMessage = "";
@@ -109,6 +126,7 @@ public class Game implements Runnable{
                         }
 
                         //TODO: regex here?
+                        // Done!
                         //Check if received message is a singular character and valid letter input
                         if (receivedMessage.length() != 1) {
                             out.writeUTF("Please enter just a singular letter.");
@@ -186,11 +204,27 @@ public class Game implements Runnable{
         }).start();
     }
 
-    private void closeConnection() throws IOException{
+//    private void closeConnection() throws IOException{
         //TODO: safely shut down reading thread and close connection (both server and socket side)
         // Should it close from server side or from client side? who knows, not me ¯\_(ツ)_/¯
-        socket.shutdownInput();
-        socket.shutdownOutput();
+        // Done! Works but might need to change later
+//        socket.shutdownInput();
+//        socket.shutdownOutput();
+//        socket.close();
+//    }
+
+    private void closeConnection() throws IOException {
+        running = false; // Stop the reading thread
+
+        try {
+            readingThread.join(); // Wait for the reading thread to finish
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // Close the connection
+        in.close();
+        out.close();
         socket.close();
     }
 

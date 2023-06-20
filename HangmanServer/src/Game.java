@@ -12,26 +12,26 @@ public class Game implements Runnable{
     private Socket socket;
     private DataInputStream in;
     private DataOutputStream out;
-    private String adress;
+    private String address;
 
     private String receivedMessage = "";
 
-    private CountDownLatch latch;
     private volatile String word;
     private String guessedLetters;
     private int mistakes;
 
     private volatile boolean readingThreadFinished = false;
     private Thread readingThread;
+    private CountDownLatch latch;
 
     Game(Socket clientSocket){
         this.socket = clientSocket;
-        this.adress = socket.getInetAddress().getHostAddress();
+        this.address = socket.getInetAddress().getHostAddress();
     }
 
     @Override
     public void run(){
-        System.out.println(adress + "\tCreated thread");
+        System.out.println(address + "\tCreated thread");
 
         try {
             in = new DataInputStream(socket.getInputStream());
@@ -43,7 +43,7 @@ public class Game implements Runnable{
                     while(true){
                         receivedMessage = in.readUTF();
                         receivedMessage = receivedMessage.toLowerCase();
-                        System.out.println(adress + "\tReceived: " + receivedMessage);
+                        System.out.println(address + "\tReceived: " + receivedMessage);
                     }
                 } catch(IOException e) {
                     if(!socket.isClosed()){
@@ -89,11 +89,11 @@ public class Game implements Runnable{
 
                     if(winCondition){
                         out.writeUTF("You won! Congratulations!");
-                        System.out.println(adress + "\t<-- won");
+                        System.out.println(address + "\t<-- won");
                         break;
                     }else if(mistakes > 5){
                         out.writeUTF("You lost. The word was " + word);
-                        System.out.println(adress + "\t<-- lost");
+                        System.out.println(address + "\t<-- lost");
                         break;
                     }
 
@@ -113,7 +113,7 @@ public class Game implements Runnable{
                         //Win instantly if entire correct word is inputted
                         if(receivedMessage.equals(word)){
                             out.writeUTF("You won! Congratulations!");
-                            System.out.println(adress + "\t<-- won");
+                            System.out.println(address + "\t<-- won");
                             break letter;
                         }
 
@@ -146,7 +146,7 @@ public class Game implements Runnable{
                 }
 
                 if(receivedMessage.equals("y")){
-                    System.out.println(adress + "\tRestarting...");
+                    System.out.println(address + "\tRestarting...");
                 }else{
                     break;
                 }
@@ -157,9 +157,8 @@ public class Game implements Runnable{
             e.printStackTrace();
         }
 
-        System.out.println(adress + "\tKilled thread");
+        System.out.println(address + "\tKilled thread");
     }
-
 
     private void selectWord(){
         new Thread(() -> {
@@ -203,7 +202,7 @@ public class Game implements Runnable{
                 // Shuffle ArrayList and pick first word
                 Collections.shuffle(list);
                 word = list.get(0);
-                System.out.println(adress + "\tSelected word: " + word);
+                System.out.println(address + "\tSelected word: " + word);
                 latch.countDown();
             } catch(Exception e) {
                 e.printStackTrace();
@@ -213,7 +212,7 @@ public class Game implements Runnable{
 
     private void closeConnection() throws IOException{
         out.writeUTF("Server connection closing");
-        System.out.println(adress + "\tServer closed connection");
+        System.out.println(address + "\tServer closed connection");
 
         in.close();
         out.close();

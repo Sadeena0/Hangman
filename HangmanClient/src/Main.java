@@ -4,7 +4,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Main{
-    public static void main(String[] args) throws IOException, InterruptedException{
+    public static void main(String[] args) throws IOException{
         int port = 8000;
         String host = "localhost";
         Socket socket;
